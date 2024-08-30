@@ -1,0 +1,27 @@
+global:  
+
+  resolve_timeout: 1m  
+
+route:  
+
+  receiver: 'gmail-notifications'  
+
+receivers:  
+
+- name: 'gmail-notifications'  
+
+  email_configs:  
+
+  - to: vsakouvogui@gmail.com  
+
+    from: felicie1933@gmail.com  
+
+    smarthost: smtp.gmail.com:587  
+
+    auth_username: felicie1933@gmail.com  
+
+    auth_identity: felicie1933@gmail.com  
+
+    auth_password: vgqiyqlveauognbc  
+
+    send_resolved: true 

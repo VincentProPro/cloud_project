@@ -1,0 +1,71 @@
+---
+- name: Deploy BackUp
+  hosts: servers
+  become: true  # To run tasks with sudo
+  vars:
+    server2_ip: "vmbackup.westeurope.cloudapp.azure.com"
+    server1_ip: "vm1335250.westeurope.cloudapp.azure.com"
+    server3_ip: "slave.westeurope.cloudapp.azure.com"
+
+
+  tasks:
+    - name: Update apt cache (for Debian/Ubuntu)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install necessary dependencies
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - curl
+        - software-properties-common  # for adding repositories
+        - apt-transport-https        # for using HTTPS with APT
+
+    - name: Configure environment  on server1 and 3
+      become: true
+      shell: |
+        sudo apt-get install php8.2-zip -y
+        sudo service nginx restart
+        sudo service apache2 restart
+        sudo apt install python3 -y
+        sudo apt install pip -y
+        pip3 install paramiko -y
+
+
+          
+      args:
+        executable: /bin/bash
+      when: "'server1' in inventory_hostname or 'server3' in inventory_hostname" 
+
+    - name: Create backup  file for on server1  and 3
+      become: yes
+      template:
+        src: /backup_script.yml.j2
+        dest: /home/epitech/backup.php
+      when: "'server1' in inventory_hostname or 'server3' in inventory_hostname"
+    - name: Create Transfert file for on server1  and 3
+      become: yes
+      template:
+        src: /backup.py.yml.j2
+        dest: /home/epitech/backup.py 
+      when: "'server1' in inventory_hostname or 'server3' in inventory_hostname"
+
+
+    
+    - name: Add ssh key on server1 and 3
+      become: yes
+      template:
+        src: vspcloud
+        dest: /home/epitech/vpscloud
+      when: "'server1' in inventory_hostname or 'server3' in inventory_hostname"
+    - name: Add sh File Transfer on server1 and 3
+      become: yes
+      template:
+        src: trans.sh.yml.j2
+        dest: /home/epitech/trans.sh
+      when: "'server1' in inventory_hostname or 'server3' in inventory_hostname"
+
+
+   

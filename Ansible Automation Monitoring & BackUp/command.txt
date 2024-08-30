@@ -1,0 +1,171 @@
+ansible -i inventory.ini all -m ping
+ansible -i inventory.ini playbook.yml
+ansible-playbook -i inventory.ini playbook.yml
+
+sudo apt install python3-paramiko
+sudo apt-get install php-mysql -y
+sudo apt-get install mariadb-server -y
+
+sudo apt-get install php-zip -y
+sudo apt-get install php8.2-zip
+
+
+sudo service apache2 restart   # Restart Apache if you are using it
+
+<?php
+
+// Définition des fonctions
+
+
+
+function get_last_insert_id($database_host, $database_username, $database_password, $database_name) {
+    $connection = new mysqli($database_host, $database_username, $database_password, $database_name);
+    $result = $connection->query("SELECT LAST_INSERT_ID()");
+    $last_insert_id = $result->fetch_row()[0];
+    $connection->close();
+    return $last_insert_id;
+}
+
+function backup_database($database_host, $database_username, $database_password, $database_name, $backup_dir, $incremental = false, $diff_incremental = false, $last_insert_id = null) {
+    $date = date("d-m-y");
+    $backup_filename = $backup_dir . "/db-mysql_$date.sql";
+
+    // Create the backup directory if it doesn't exist
+    if (!file_exists($backup_dir)) {
+        mkdir($backup_dir, 0755, true);
+    }
+
+    $command = "mysqldump --user=$database_username --password=$database_password --host=$database_host $database_name";
+
+    if ($incremental) {
+        $command .= " --incremental --last-insert-id=$last_insert_id";
+    }
+
+    if ($diff_incremental) {
+        $command .= " --diff-incremental";
+    }
+
+    $command .= " > $backup_filename";
+
+    shell_exec($command);
+
+    return $backup_filename;
+}
+
+function compress_file($filename) {
+    $zip = new ZipArchive();
+    $zipFilename = $filename . '.zip';
+
+    if ($zip->open($zipFilename, ZipArchive::CREATE) === true) {
+        $zip->addFile($filename, basename($filename));
+        $zip->close();
+    }
+
+    return $zipFilename;
+}
+
+function perform_backup_and_transfer($destination_hostname, $destination_username, $destination_key_filename, $destination_key_password,
+                                     $database_host, $database_username, $database_password, $database_name, $backup_dir) {
+    
+
+    try {
+        
+
+        $last_insert_id = get_last_insert_id($database_host, $database_username, $database_password, $database_name);
+
+        $backup_filename = backup_database($database_host, $database_username, $database_password, $database_name, $backup_dir, true, false, $last_insert_id);
+
+        $compressed_filename = compress_file($backup_filename);
+
+        
+
+        echo "Sauvegarde effectuée avec succès.\n";
+
+    } catch (Exception $e) {
+        echo "Une erreur s'est produite : " . $e->getMessage() . "\n";
+
+    } finally {
+     
+    }
+}
+
+// Fonction principale
+
+function main() {
+    // Définir les paramètres
+    $destination_hostname = 'vmbackup.westeurope.cloudapp.azure.com';
+    $destination_username = 'epitech';
+    $destination_key_filename = '/home/techplus/vpscloud';
+    $destination_key_password = '';
+    $database_host = 'localhost';
+    $database_username = 'db_user';
+    $database_password = 'db_pass';
+    $database_name = 'forge';
+    $backup_dir = '/tmp/db-backups';
+
+    // Appeler la nouvelle fonction
+    perform_backup_and_transfer($destination_hostname, $destination_username, $destination_key_filename, $destination_key_password,
+                                 $database_host, $database_username, $database_password, $database_name, $backup_dir);
+}
+
+
+main();
+
+
+?>
+
+
+
+
+$ftp = "ftp";
+$username = "username";
+$pwd = "password";
+$filename = $_FILES[$xyz][$abc];
+$tmp = $_FILES['file']['tmp_name'];
+$destination = "/Content/EnquiryXML ";
+
+$connect = ftp_connect($ftp)or die("Unable to connect to host");
+ftp_login($connect,$username,$pwd)or die("Authorization Failed");
+echo "Connected!<br/>";              
+
+if(!$filename)
+{
+    echo"Please select a file";
+}
+
+else
+{
+    ftp_put($connect,$destination.'/'.$filename,$tmp,FTP_ASCII)or die("Unable to upload");
+    echo"File successfully uploaded to FTP";
+}
+
+$localZipFilePath = '/tmp/db-backups/db-mysql_14-02-24.sql.zip';
+$remoteZipFilePath = '/home/test/files/filebackup.zip';
+
+$ftpServer = 'vmbackup.westeurope.cloudapp.azure.com';
+$ftpUsername = 'test';
+$ftpPassword = 'test';
+
+<?php
+
+// connect and login to FTP server
+$ftp_server = "vmbackup.westeurope.cloudapp.azure.com";
+$ftp_username = "test";
+$ftp_userpass = "test";
+$ftp_conn = ftp_connect($ftp_server) or die("Could not connect to $ftp_server");
+$login = ftp_login($ftp_conn, $ftp_username, $ftp_userpass);
+$file ="/tmp/db-backups/db-mysql_14-02-24.sql.zip";
+
+// upload file 
+if (ftp_put($ftp_conn, "/home/test/files/filebackup.zip" , $file, FTP_ASCII)){
+    echo "Successfully uploaded $file.";
+} else {
+    echo "Error uploading $file";
+}
+
+// close connection
+ftp_close($ftp_conn); 
+
+?>
+
+

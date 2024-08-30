@@ -1,0 +1,9 @@
+- name: My back playbook
+  vars_files: 
+    - roles/databases/vars/credentials.yml
+  remote_user: "{{ user }}"
+  connection: ssh 
+  hosts: machine
+  roles:
+    - role: databases
+      message: "Vérification de l'état des bases de données effectuée"

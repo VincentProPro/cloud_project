@@ -1,0 +1,203 @@
+---
+- name: Deploy Prometheus, Grafana, and Node Exporter
+  hosts: servers
+  become: true  # To run tasks with sudo
+  vars:
+    prometheus_server2_ip: "vmbackup.westeurope.cloudapp.azure.com"
+    node_exporter_server1_ip: "vm1335250.westeurope.cloudapp.azure.com"
+    node_exporter_server3_ip: "slave.westeurope.cloudapp.azure.com"
+
+
+  tasks:
+    - name: Update apt cache (for Debian/Ubuntu)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install necessary dependencies
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - curl
+        - software-properties-common  # for adding repositories
+        - apt-transport-https        # for using HTTPS with APT
+
+    - name: Download and extract Node Exporter on server1
+      become: true
+      shell: |
+        wget https://github.com/prometheus/node_exporter/releases/download/v0.15.2/node_exporter-0.15.2.linux-amd64.tar.gz
+        tar -xf node_exporter-0.15.2.linux-amd64.tar.gz
+        sudo mv node_exporter-0.15.2.linux-amd64/node_exporter /usr/local/bin
+        rm -r node_exporter-0.15.2.linux-amd64*
+        sudo useradd -rs /bin/false node_exporter
+        sudo systemctl daemon-reload
+        
+      args:
+        executable: /bin/bash
+      when: "'server1' in inventory_hostname or 'server3' in inventory_hostname" 
+
+    - name: Download and extract Node Exporter on server2
+      become: true
+      shell: |
+        wget https://github.com/prometheus/node_exporter/releases/download/v0.15.2/node_exporter-0.15.2.linux-amd64.tar.gz
+        tar -xf node_exporter-0.15.2.linux-amd64.tar.gz
+        sudo mv node_exporter-0.15.2.linux-amd64/node_exporter /usr/local/bin
+        rm -r node_exporter-0.15.2.linux-amd64*
+        sudo apt-get install gnupg -y
+        sudo useradd -rs /bin/false node_exporter
+        sudo systemctl daemon-reload
+      args:
+        executable: /bin/bash
+      when: "'server2' in inventory_hostname"
+
+    - name: Create systemd unit file for Node Exporter on server1
+      become: yes
+      template:
+        src: node_exporter.service
+        dest: /etc/systemd/system/node_exporter.service
+      notify: restart node_exporter
+      when: "'server1' in inventory_hostname or 'server3' in inventory_hostname"
+
+    - name: Enable and start Node Exporter service on server1
+      become: yes
+      systemd:
+        name: node_exporter
+        enabled: yes
+        state: started
+      when: "'server1' in inventory_hostname or 'server3' in inventory_hostname"
+    - name: Create systemd unit file for Node Exporter on server2
+      become: yes
+      template:
+        src: node_exporter.service
+        dest: /etc/systemd/system/node_exporter.service
+      notify: restart node_exporter
+      when: "'server2' in inventory_hostname"
+
+    - name: Enable and start Node Exporter service on server2
+      become: yes
+      systemd:
+        name: node_exporter
+        enabled: yes
+        state: started
+      when: "'server2' in inventory_hostname" 
+
+
+    - name: Add Prometheus APT key
+      apt_key:
+        url: https://packages.grafana.com/gpg.key
+      when: "'server2' in inventory_hostname"
+
+    - name: Add Prometheus APT repository
+      apt_repository:
+        repo: deb https://packages.grafana.com/oss/deb stable main
+      when: "'server2' in inventory_hostname"
+    - name: Download and extract Prometheus on server2
+      become: true
+      shell: |
+        wget https://github.com/prometheus/prometheus/releases/download/v2.1.0/prometheus-2.1.0.linux-amd64.tar.gz 
+        tar -xf prometheus-2.1.0.linux-amd64.tar.gz 
+        sudo mv prometheus-2.1.0.linux-amd64/prometheus prometheus-2.1.0.linux-amd64/promtool /usr/local/bin
+        sudo mkdir /etc/prometheus /var/lib/prometheus 
+        sudo mv prometheus-2.1.0.linux-amd64/consoles prometheus-2.1.0.linux-amd64/console_libraries /etc/prometheus 
+        rm -r prometheus-2.1.0.linux-amd64* 
+      args:
+        executable: /bin/bash
+      when: "'server2' in inventory_hostname"
+    - name: Add lines to /etc/hosts on server2
+      lineinfile:
+        path: /etc/hosts
+        line: 
+          - '127.0.0.1 localhost'
+          - '{{ prometheus_server2_ip }} backupmachine'
+          - '{{ node_exporter_server1_ip }} vmprimaire'
+        state: present
+      when: "'server2' in inventory_hostname"
+
+    - name: Create Prometheus configuration file
+      become: yes
+      template:
+        src: prometheus.yml.j2
+        dest: /etc/prometheus/prometheus.yml
+      notify: restart prometheus
+      when: "'server2' in inventory_hostname"
+
+
+    - name: Create systemd unit file for Prometheus
+      become: yes
+      template:
+        src: prometheus.service
+        dest: /etc/systemd/system/prometheus.service
+      notify: restart prometheus
+      when: "'server2' in inventory_hostname"
+    - name: Ensure Prometheus directories ownership
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: '0755'
+      loop:
+        - /etc/prometheus
+        - /var/lib/prometheus
+      when: "'server2' in inventory_hostname"
+
+    - name: Restart Prometheus on server2
+      become: true
+      shell: |
+        sudo systemctl daemon-reload 
+        sudo systemctl enable prometheus 
+        sudo systemctl start prometheus 
+      args:
+        executable: /bin/bash
+      when: "'server2' in inventory_hostname"
+
+  
+
+    - name: Install Grafana on server2
+      apt:
+        name: grafana
+        state: present
+      when: "'server2' in inventory_hostname"
+
+    - name: Enable and start Grafana service
+      systemd:
+        name: grafana-server
+        enabled: yes
+        state: started
+      when: "'server2' in inventory_hostname"
+    - name: Restart Grafana  on server2
+      become: yes
+      shell: |
+        sudo systemctl daemon-reload
+      args:
+        executable: /bin/bash
+      when: "'server2' in inventory_hostname"
+    
+
+
+
+    - name: Install Prometheus, AlertManager, and Grafana on server2
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - prometheus
+        - grafana
+      when: "'server2' in inventory_hostname"
+
+  handlers:
+    - name: restart node_exporter
+      systemd:
+        name: node_exporter
+        state: restarted
+    - name: restart prometheus
+      systemd:
+        name: prometheus
+        state: restarted
+    - name: restart grafana
+      systemd:
+        name: grafana
+        state: restarted
+
+

@@ -1,0 +1,389 @@
+############################ Mysql server installation ############################
+
+- name: Get stats of mysql_list
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/mysql.list
+  register: mysql_list
+
+##---------------------------------------------------------##
+
+- name: Add mysql repository
+  become: yes
+  ansible.builtin.template:
+    src: templates/mysql-list.j2
+    dest: /etc/apt/sources.list.d/mysql.list
+    owner: root
+    group: root
+    mode: u=rw,g=r,o=r
+  when: mysql_list.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Installing Mysql and dependencies
+  become: yes    
+  ansible.builtin.package:
+    name: "{{item}}"
+    state: present
+    update_cache: yes
+  loop:
+    - mysql-server
+    - mysql-client 
+    - python3-mysqldb
+    - libmysqlclient-dev
+
+##---------------------------------------------------------##
+
+- name: Make sure mysqld service is running
+  become: true
+  ansible.builtin.service:
+    name: mysql
+    state: started
+    enabled: yes
+
+
+############################  Mysql server configuration ############################
+
+# - name: Collect all possible information using passwordless root access
+#   become: true
+#   community.mysql.mysql_info:
+#     login_user: root
+#     login_unix_socket: /run/mysqld/mysqld.sock
+#   register: check_root_access
+#   ignore_errors: true
+
+# - debug:
+#     msg: "{{check_root_access}}"
+
+##---------------------------------------------------------##
+
+# - name: Change root password
+#   become: true
+#   community.mysql.mysql_user:
+#     name: "{{mysql_root_user}}"
+#     password: "{{mysql_root_password}}"
+#     priv: '*.*:ALL'
+#     host: 127.0.0.1
+#     check_implicit_admin: yes
+#     state: present 
+#   when: check_root_access.failed == false or check_root_access.changed == false
+
+##---------------------------------------------------------##
+
+- name: Create mysql user
+  become: true
+  community.mysql.mysql_user:
+    name: "{{db_user}}"
+    password: "{{db_pass}}"
+    priv: '*.*:ALL'
+    host: '%'
+    login_host: localhost
+    check_implicit_admin: yes
+    state: present 
+
+# - debug:
+#     msg: "{{ess}}"
+
+
+############################  Source code transfert ############################
+
+- name: install git
+  become: true
+  ansible.builtin.package:
+    name: git
+    state: present
+
+##---------------------------------------------------------##
+
+- name: Get stats of app dir
+  ansible.builtin.stat:
+    path: /home/serge/app
+  register: app
+
+##---------------------------------------------------------##
+
+- name: Clone source code gitlab repo
+  ansible.builtin.git:
+    repo: 'https://gitlab.infra.connectwork.fr/epitech/sample-app.git'
+    dest: "{{source_code_dest_dir}}"
+    single_branch: yes
+    version: master
+  when: app.stat.exists == False 
+  register: repo
+
+############################ Update PHP ############################
+
+- name: Get stats of php_list_
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/php.list
+  register: php_list_
+
+##---------------------------------------------------------##
+
+- name: Installing php prerequisites
+  become: yes    
+  ansible.builtin.package:
+    name: "{{item}}"
+    state: present
+    update_cache: yes
+  loop:
+    - ca-certificates 
+    - apt-transport-https 
+    - software-properties-common 
+    - wget 
+    - lsb-release
+    - curl
+  when: php_list_.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Create PHP list
+  become: true
+  ansible.builtin.shell:
+    cmd: "{{php_list}}"
+  when: php_list_.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Add php key
+  become: true
+  ansible.builtin.shell:
+    cmd: "{{key_add}}"
+  when: php_list_.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Installing PHP and others related packages
+  become: yes    
+  ansible.builtin.package:
+    name: "{{item}}"
+    state: present
+    update_cache: yes
+  loop:
+    - php8.2
+    - php8.2-cli 
+    - php8.2-mbstring 
+    - php8.2-xml 
+    - php8.2-common 
+    - php8.2-curl
+    - php8.2-mysql
+    - php8.2-fpm
+
+    
+############################ Install composer ############################
+
+- name: Get stats of composer exec
+  ansible.builtin.stat:
+    path: /usr/local/bin/composer
+  register: composer_exec
+
+##---------------------------------------------------------##
+
+# - name: Installing composer prerequisites
+#   become: yes    
+#   ansible.builtin.package:
+#     name: "{{item}}"
+#     state: present
+#     update_cache: yes
+#   loop:
+#     - curl
+#     - php-cli 
+#     - php-mbstring
+#     - unzip
+#   when: composer_exec.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Download installer
+  ansible.builtin.shell:
+    cmd: "{{composer_installer_download}}"
+    chdir: "{{remote_home}}"
+  when: composer_exec.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Download hash
+  ansible.builtin.shell:
+    cmd: "{{composer_get_sig}}"
+  register: signature
+  when: composer_exec.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Check Hash download
+  ansible.builtin.debug: 
+    msg: "{{signature.stdout_lines[0]}}"
+  when: composer_exec.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Check installer part 1
+  ansible.builtin.shell:
+    cmd: "{{composer_installer_check}}"
+    chdir: "{{remote_home}}"
+  register: composer_check
+  when: composer_exec.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Check installer part 2
+  ansible.builtin.debug: 
+    msg: "{{composer_check.stdout_lines[0]}}"
+  when: composer_exec.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Composer installation
+  become: true
+  ansible.builtin.shell:
+    cmd: "{{composer_install}}"
+  register: composer
+  when: composer_exec.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Check composer installation part 1
+  ansible.builtin.debug: 
+    msg: "{{composer.stdout_lines}}"
+  when: composer_exec.stat.exists == False
+
+##---------------------------------------------------------##
+
+- name: Check composer installation part 2
+  ansible.builtin.command:
+    cmd: composer
+
+
+############################ Build app ############################
+
+- name: Create app database 
+  community.mysql.mysql_db:
+    name: "{{db_name}}"
+    login_user: "{{db_user}}"
+    login_password: "{{db_pass}}"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+##---------------------------------------------------------##
+
+- name: Download and installs all libs and dependencies 
+  community.general.composer:
+    command: "{{item}}"
+    working_dir: "{{app_dir}}"
+    executable: "{{php_dir}}"
+  loop:
+    - install
+
+##---------------------------------------------------------##
+
+# - name: Echo my_env_var
+#   shell: "echo $MYSQLCONNSTR_DB_APP_PASSWORD"
+#   environment: "{{remote_env}}"
+#   register: var_
+
+# - debug: 
+#     msg: "{{var_}}"
+
+##---------------------------------------------------------##
+
+- name: Configuring PHP and Nginx run as same user and group
+  become: yes
+  ansible.builtin.template:
+    src: templates/env.j2
+    dest: "{{app_dir}}/.env"
+    owner: serge
+    group: serge
+    mode: u=rw,g=r,o=r
+
+##---------------------------------------------------------##
+
+- name: Build app pre-requisites
+  become: yes    
+  ansible.builtin.shell:
+    cmd: "{{item}}"
+    chdir: "{{app_dir}}"
+  loop:
+    - "{{migration}}"
+    - "{{seed}}" 
+
+
+############################ Deploy app with Nginx ############################
+
+- name: Installing Nginx
+  become: yes    
+  ansible.builtin.package:
+    name: nginx
+    state: present
+    update_cache: yes
+
+##---------------------------------------------------------##
+
+- name: Configuring PHP and Nginx run as same user and group
+  become: yes
+  ansible.builtin.template:
+    src: templates/www.conf.j2
+    dest: /etc/php/8.2/fpm/pool.d/www.conf
+    owner: root
+    group: root
+    mode: u=rw,g=r,o=r
+
+##---------------------------------------------------------##
+
+- name: Restarting FPM
+  become: true
+  ansible.builtin.service:
+    name: php8.2-fpm
+    state: restarted
+
+##---------------------------------------------------------##
+
+- name: Change app dir owner
+  become: yes    
+  ansible.builtin.file:
+    dest: "{{source_code_dest_dir}}"
+    owner: serge
+    group: www-data
+    mode: o=rwX,g=rwX,o=r
+    recurse: yes
+
+
+##---------------------------------------------------------##
+
+
+- name: Change nginx default port
+  become: yes
+  ansible.builtin.template:
+    src: templates/nginx_default.j2
+    dest: "{{default_server_block_path}}"
+    mode: u=rw,g=r,o=r
+  notify: 
+  - Restart nginx
+
+##---------------------------------------------------------##
+
+- name: Create the app Nginx Server Block
+  become: yes
+  ansible.builtin.template:
+    src: templates/nginx_laravel.j2
+    dest: "{{app_server_block_path}}"
+    mode: u=rw,g=r,o=r
+  notify: 
+  - Restart nginx
+
+##---------------------------------------------------------##
+
+- name: Enable the app Nginx Server Block
+  become: yes    
+  ansible.builtin.file:
+    src: "{{app_server_block_path}}"
+    dest: "{{site_enable_path}}"
+    state: link
+
+##---------------------------------------------------------##
+
+- name: Check nginx syntax
+  become: yes    
+  ansible.builtin.shell:
+    cmd: nginx -t
+  notify:
+  - Restart nginx
+  

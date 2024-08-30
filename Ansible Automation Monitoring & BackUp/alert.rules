@@ -1,0 +1,167 @@
+groups: 
+
+- name: alert.rules 
+
+  rules: 
+
+  - alert: InstanceDown 
+
+    expr: up == 0 
+
+    for: 1m 
+
+    labels: 
+
+      severity: "critical" 
+
+    annotations: 
+
+      summary: "Endpoint {{ $labels.instance }} down" 
+
+      description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minutes." 
+
+  - alert: Trop_De_Load 
+
+    expr: node_load1 >= 0.6 
+
+    for: 10s 
+
+    labels: 
+
+      severity: critical 
+
+    annotations: 
+
+      summary: "{{ $labels.instance }} trop de load" 
+
+      description: "{{ $labels.instance }} of job {{ $labels.job }} fatigue le serveur." 
+
+  - alert: Space_Moitie_Plein 
+
+    expr: sum(node_filesystem_avail) >= sum(node_filesystem_size)*0.8 
+
+    for: 60m 
+
+    labels: 
+
+      severity: warning 
+
+    annotations: 
+
+      summary: "{{ $labels.instance }} A depasse la Moitie" 
+
+      description: "{{ $labels.instance }} of job {{ $labels.job }} utilise 80% de l'espace." 
+
+  - alert: Space_Presque_Plein 
+
+    expr: sum(node_filesystem_avail) >= sum(node_filesystem_size)*0.9 
+
+    for: 10m 
+
+    labels: 
+
+      severity: critique 
+
+    annotations: 
+
+      summary: "{{ $labels.instance }} A Moitie Plein" 
+
+      description: "{{ $labels.instance }} of job {{ $labels.job }} utilise 50% de l'espace." 
+
+  - alert: HostOutOfMemory 
+
+    expr: node_memory_MemAvailable / node_memory_MemTotal * 100 < 25 
+
+    for: 5m 
+
+    labels: 
+
+      severity: warning 
+
+    annotations: 
+
+      summary: "Host out of memory (instance {{ $labels.instance }})" 
+
+      description: "Node memory is filling up (< 25% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}" 
+ 
+
+  - alert: HostOutOfDiskSpace 
+
+    expr: (node_filesystem_avail{mountpoint="/"}  * 100) / node_filesystem_size{mountpoint="/"} < 50 
+
+    for: 1s 
+
+    labels: 
+
+      severity: warning 
+
+    annotations: 
+
+      summary: "Host out of disk space (instance {{ $labels.instance }})" 
+
+      description: "Disk is almost full (< 50% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}" 
+
+  - alert: HostHighCpuLoad 
+
+    expr: (sum by (instance) (irate(node_cpu{job="node_exporter_metrics",mode="idle"}[5m]))) > 80 
+
+    for: 5m 
+
+    labels: 
+
+      severity: warning 
+
+    annotations: 
+
+      summary: "Host high CPU load (instance {{ $labels.instance }})" 
+
+      description: "CPU load is > 80%\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}" 
+
+- alert: Vote service Stopped  
+
+    expr: (time() - container_start_time_seconds{instance="webmachine:8081", container_label_com_docker_compose_service="vote"})/86400 <0.1  
+
+    for: 1m  
+
+    labels:  
+
+      severity: critical  
+
+    annotations:  
+
+      summary: "Le container Vote s’est arrêté"  
+
+      description: "Redémarre le container pour reprendre service"  
+
+  - alert: Result service Stopped  
+
+    expr: (time() - container_start_time_seconds{instance="webmachine:8081", container_label_com_docker_compose_service="result"})/86400 <0.1  
+
+    for: 1m  
+
+    labels:  
+
+      severity: critical  
+
+    annotations:  
+
+      summary: "Le container Result s’est arrêté"  
+
+      description: "Redémarre le container pour reprendre service"  
+
+  - alert: Worker service Stopped  
+
+    expr: (time() - container_start_time_seconds{instance="webmachine:8081", container_label_com_docker_compose_service="worker"})/86400 <0.1  
+
+    for: 1m  
+
+    labels:  
+
+      severity: critical  
+
+    annotations:  
+
+      summary: "Le container Worker s’est arrêté"  
+
+      description: "Redémarre le container pour reprendre service"  
+
